@@ -14,6 +14,22 @@ static DNSServer &sharedEvilPortalDnsServer() {
     return server;
 }
 
+static bool cancelEvilPortalSetup() {
+#if defined(T_EMBED_1101)
+    // The input task repeats a held Back button. Drain it before returning to a menu.
+    unsigned long releasedAt = millis();
+    while (millis() - releasedAt < 20) {
+        if (digitalRead(BK_BTN) == BTN_ACT) releasedAt = millis();
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+#endif
+    check(EscPress);
+    check(SelPress);
+    check(AnyKeyPress);
+    returnToMenu = true;
+    return false;
+}
+
 EvilPortal::EvilPortal(
     String tssid, uint8_t channel, bool deauth, bool verifyPwd, bool autoMode, bool backgroundMode,
     String templateFile
@@ -76,8 +92,9 @@ bool EvilPortal::setup() {
         return true;
     }
 
+    bool cancelled = false;
     options = {
-        {"Custom Html", [this]() { loadCustomHtml(); }}
+        {"Custom Html", [this, &cancelled]() { cancelled = !loadCustomHtml(); }}
     };
     addOptionToMainMenu();
 
@@ -87,23 +104,19 @@ bool EvilPortal::setup() {
         options.insert(options.begin(), {"Default", [this]() { loadDefaultHtml_one(); }});
     }
 
-    loopOptions(options);
-    if (returnToMenu) return false;
-
-    memcpy(deauth_frame, deauth_frame_default, sizeof(deauth_frame_default));
-    wsl_bypasser_send_raw_frame(&ap_record, _channel);
+    if (loopOptions(options) < 0 || returnToMenu || cancelled) return cancelEvilPortalSetup();
 
     if (apName.isEmpty()) {
         if (bruceConfig.evilWifiNames.empty()) {
-            apName_from_keyboard();
+            if (!apName_from_keyboard()) return cancelEvilPortalSetup();
         } else {
             options = {
-                {"Custom Wifi", [this]() { apName_from_keyboard(); }}
+                {"Custom Wifi", [this, &cancelled]() { cancelled = !apName_from_keyboard(); }}
             };
             for (const auto &_wifi : bruceConfig.evilWifiNames) {
                 options.emplace_back(_wifi.c_str(), [this, _wifi]() { this->apName = _wifi; });
             }
-            loopOptions(options);
+            if (loopOptions(options) < 0 || returnToMenu || cancelled) return cancelEvilPortalSetup();
         }
     }
 
@@ -116,7 +129,10 @@ bool EvilPortal::setup() {
         {"192.168.4.1", [this]() { apGateway = IPAddress(192, 168, 4, 1); }},
     };
 
-    loopOptions(options);
+    if (loopOptions(options) < 0 || returnToMenu) return cancelEvilPortalSetup();
+
+    memcpy(deauth_frame, deauth_frame_default, sizeof(deauth_frame_default));
+    wsl_bypasser_send_raw_frame(&ap_record, _channel);
 
     Serial.println("Evil Portal output file: " + outputFile);
     return true;
@@ -493,9 +509,10 @@ void EvilPortal::printDeauthStatus() {
     }
 }
 
-void EvilPortal::loadCustomHtml() {
-    getFsStorage(fsHtmlFile);
+bool EvilPortal::loadCustomHtml() {
+    if (!getFsStorage(fsHtmlFile)) return false;
     htmlFileName = loopSD(*fsHtmlFile, true, "HTML", "/");
+    if (htmlFileName.isEmpty() || returnToMenu) return false;
     String fileBaseName =
         htmlFileName.substring(htmlFileName.lastIndexOf("/") + 1, htmlFileName.length() - 5);
     fileBaseName.toLowerCase();
@@ -503,6 +520,7 @@ void EvilPortal::loadCustomHtml() {
     isDefaultHtml = false;
 
     File htmlFile = fsHtmlFile->open(htmlFileName, FILE_READ);
+    if (!htmlFile) return false;
     if (htmlFile) {
         String firstLine = htmlFile.readStringUntil('\n');
         htmlFile.close();
@@ -512,6 +530,7 @@ void EvilPortal::loadCustomHtml() {
             if (apEnd != -1) { apName = firstLine.substring(apStart + 9, apEnd); }
         }
     }
+    return true;
 }
 
 bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
@@ -841,9 +860,9 @@ void EvilPortal::saveToCSV(const String &csvLine, bool isAPname) {
     log_i("data saved");
 }
 
-void EvilPortal::apName_from_keyboard() {
+bool EvilPortal::apName_from_keyboard() {
     apName = keyboard("Free Wifi", 30, "Evil Portal SSID:");
-    if (apName == "\x1B") apName = "Free Wifi";
+    return apName != "\x1B" && !returnToMenu;
 }
 
 bool EvilPortal::verifyCreds(String &Ssid, String &Password) {

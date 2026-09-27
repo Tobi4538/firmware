@@ -98,7 +98,7 @@ private:
     void resetCapturedCredentials(void);
     void printDeauthStatus(void);
     void printLastCapturedCredential(void);
-    void loadCustomHtml(void);
+    bool loadCustomHtml(void);
     bool loadCustomHtmlFromPath(const String &path);
     void loadDefaultHtml(void);
     void loadDefaultHtml_one(void);
@@ -111,7 +111,7 @@ private:
     String ssid_GET(void);
     String ssid_POST(void);
 
-    void apName_from_keyboard(void);
+    bool apName_from_keyboard(void);
 };
 
 #endif
