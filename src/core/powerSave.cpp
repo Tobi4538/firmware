@@ -39,11 +39,14 @@ void sleepModeOn() {
 
     panelSleep(true); //  power down screen
 
+#if !defined(T_EMBED_1101)
     disableCore0WDT();
 #if SOC_CPU_CORES_NUM > 1
     disableCore1WDT();
 #endif
     disableLoopWDT();
+#endif
+    // Normal sleep still schedules tasks. Keep T-Embed watchdog subscriptions intact.
     delay(200);
 }
 
@@ -54,11 +57,13 @@ void sleepModeOff() {
     panelSleep(false); // wake the screen back up
 
     getBrightness();
+#if !defined(T_EMBED_1101)
     enableCore0WDT();
 #if SOC_CPU_CORES_NUM > 1
     enableCore1WDT();
 #endif
     enableLoopWDT();
     feedLoopWDT();
+#endif
     delay(200);
 }

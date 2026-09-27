@@ -16,6 +16,9 @@
 #include "utils.h"
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <globals.h>
+#if defined(T_EMBED_1101)
+#include <esp_task_wdt.h>
+#endif
 
 int currentScreenBrightness = -1;
 
@@ -166,6 +169,10 @@ void setBrightnessMenu() {
 void setSleepMode() {
     sleepModeOn();
     while (1) {
+#if defined(T_EMBED_1101)
+        // Feed only if this task was already subscribed before entering Sleep.
+        if (esp_task_wdt_status(nullptr) == ESP_OK) esp_task_wdt_reset();
+#endif
         if (check(AnyKeyPress)) {
             sleepModeOff();
             returnToMenu = true;
