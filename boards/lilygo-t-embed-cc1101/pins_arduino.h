@@ -48,10 +48,7 @@ static const uint8_t SCL = GROVE_SCL;
 #define MINBRIGHT (uint8_t)1
 #define PIN_POWER_ON 15
 
-// Font Sizes
-#define FP 1
-#define FM 2
-#define FG 3
+// Font sizes use Bruce defaults from precompiler_flags.h
 
 // SD Card
 #define SDCARD_CS 13
