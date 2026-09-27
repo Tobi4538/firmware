@@ -93,8 +93,9 @@ bool EvilPortal::setup() {
     }
 
     bool cancelled = false;
+    bool customHtmlSelected = false;
     options = {
-        {"Custom Html", [this, &cancelled]() { cancelled = !loadCustomHtml(); }}
+        {"Custom Html", [&customHtmlSelected]() { customHtmlSelected = true; }}
     };
     addOptionToMainMenu();
 
@@ -105,6 +106,10 @@ bool EvilPortal::setup() {
     }
 
     if (loopOptions(options) < 0 || returnToMenu || cancelled) return cancelEvilPortalSetup();
+
+    // loopSD replaces the global options vector, destroying its callbacks.
+    // Open it only after the selected menu callback has returned.
+    if (customHtmlSelected && !loadCustomHtml()) return cancelEvilPortalSetup();
 
     if (apName.isEmpty()) {
         if (bruceConfig.evilWifiNames.empty()) {
