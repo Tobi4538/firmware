@@ -1,0 +1,84 @@
+name: Meshtastic BLE preparation
+
+on:
+  push:
+    branches: [codex/meshtastic-ble-client]
+  pull_request:
+    branches: [firmware-dev]
+    paths:
+      - 'src/modules/meshtastic/**'
+      - 'src/core/menu_items/BleMenu.cpp'
+      - 'boards/meshtastic-ble.ini'
+      - 'tests/meshtastic/**'
+      - '.github/workflows/meshtastic-ble.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meshtastic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test PhoneAPI subset with sanitizers
+        run: |
+          mkdir -p build-tests
+          g++ -std=c++17 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc \
+            tests/meshtastic/test_mesh_wire.cpp src/modules/meshtastic/mesh_wire.cpp \
+            -o build-tests/mesh-wire
+          ./build-tests/mesh-wire
+
+  firmware:
+    needs: protocol
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [lilygo-t-embed-cc1101-meshtastic, lilygo-t-embed-meshtastic]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386
+          pip install platformio requests esptool intelhex
+      - uses: actions/cache/restore@v4
+        id: build-cache
+        with:
+          path: |
+            ~/.platformio
+            .pio/libdeps
+          key: meshtastic-${{ matrix.environment }}-${{ hashFiles('platformio.ini', 'boards/meshtastic-ble.ini') }}
+      - name: Compile experimental firmware
+        run: |
+          set -o pipefail
+          pio run -e '${{ matrix.environment }}' 2>&1 | tee firmware-build.log
+      - name: Save downloaded tools even after a compile failure
+        if: always() && steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio/libdeps
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      - name: Save firmware and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-${{ matrix.environment }}
+          path: |
+            firmware-build.log
+            Bruce-*.bin
+            .pio/build/${{ matrix.environment }}/firmware.bin
+            .pio/build/${{ matrix.environment }}/bootloader.bin
+            .pio/build/${{ matrix.environment }}/partitions.bin
+          retention-days: 14
