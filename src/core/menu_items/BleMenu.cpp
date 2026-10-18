@@ -5,6 +5,9 @@
 #include "modules/ble/ble_common.h"
 #include "modules/ble/ble_ninebot.h"
 #include "modules/ble/ble_spam.h"
+#if defined(BRUCE_MESHTASTIC_BLE) && !defined(LITE_VERSION)
+#include "modules/meshtastic/meshtastic_client.h"
+#endif
 #if !defined(LITE_VERSION)
 #include "modules/ble/BLE_Suite.h"
 #else
@@ -14,6 +17,9 @@
 
 void BleMenu::optionsMenu() {
     options.clear();
+#if defined(BRUCE_MESHTASTIC_BLE) && !defined(LITE_VERSION)
+    options.push_back({"Meshtastic BLE", meshtasticMenu});
+#endif
 #if !defined(LITE_VERSION)
     if (BLEConnected) {
         options.push_back({"Disconnect", [=]() {
@@ -137,3 +143,4 @@ void BleMenu::drawIcon(float scale) {
         bruceConfig.bgColor
     );
 }
+
